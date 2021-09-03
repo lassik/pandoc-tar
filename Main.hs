@@ -32,6 +32,7 @@ data Params = Params
   , template       :: Maybe Text
   } deriving (Show)
 
+defaultParams :: Params
 defaultParams = Params
   { text       = T.empty
   , from       = Nothing
@@ -42,14 +43,13 @@ defaultParams = Params
   , template   = Nothing
   }
 
-failedTarEntry oldTarEntry = oldTarEntry
-
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
 -- it will mean that features requiring IO, like RST includes, will not work.
 -- Changing this to
 --    handleErr =<< liftIO (runIO (convertDocument' params))
 -- will allow the IO operations.
+convertDocument :: MonadError (IO a) m => Params -> m Text
 convertDocument params = handleErr $ runPure (convertDocument' params)
 
 convertDocument' :: PandocMonad m => Params -> m Text
@@ -94,18 +94,19 @@ convertDocument' params = do
                    , writerTemplate   = mbTemplate
                    }
 
+handleErr :: MonadError (IO a1) m => Either PandocError a2 -> m a2
 handleErr (Right t) = return t
 handleErr (Left err) =
   throwError $ ioError (userError (T.unpack (renderError err)))
 
 convertTarEntry :: Params -> Tar.Entry -> Tar.Entry
 convertTarEntry params entry = case Tar.entryContent entry of
-  Tar.NormalFile bytes fileSize ->
+  Tar.NormalFile bytes _ ->
     ( ( let oldPath = Tar.Entry.entryPath entry
             newPath =
               ( case Tar.Entry.toTarPath False oldPath of
-                Left  _       -> Tar.Entry.entryTarPath entry
-                Right newPath -> newPath
+                Left  _        -> Tar.Entry.entryTarPath entry
+                Right newPath' -> newPath'
               )
         in  case
               ( convertDocument params
@@ -122,10 +123,11 @@ convertTarEntry params entry = case Tar.entryContent entry of
     )
   _ -> entry
 
+convertTarEntries :: Params -> Tar.Entries e -> [Tar.Entry.Entry]
 convertTarEntries params entries = Tar.foldEntries
   (\entry newEntries -> (convertTarEntry params entry) : newEntries)
   []
-  (\error -> [])
+  (\_error -> [])
   entries
 
 data Flag
@@ -152,6 +154,7 @@ parseCommandLine args = case getOpt Permute commandLineOptions args of
     ioError (userError (concat errs ++ usageInfo header commandLineOptions))
   where header = "Usage: pandoc-tar [-f FORMAT] -t FORMAT <in.tar >out.tar"
 
+main :: IO ()
 main = do
   args                  <- getArgs
   (actions, nonOptions) <- parseCommandLine args

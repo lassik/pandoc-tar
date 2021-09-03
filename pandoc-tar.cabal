@@ -23,6 +23,8 @@ executable pandoc-tar
       .
   build-depends:
       base >=4.7 && <5
+    , bytestring
+    , mtl
     , pandoc
     , tar
     , text

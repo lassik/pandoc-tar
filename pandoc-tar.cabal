@@ -1,0 +1,30 @@
+cabal-version:  1.12
+name:           pandoc-tar
+version:        0.1.0.0
+description:    Convert tar archive full of documents using Pandoc
+homepage:       https://github.com/lassik/pandoc-tar#readme
+bug-reports:    https://github.com/lassik/pandoc-tar/issues
+author:         Lassi Kortela
+maintainer:     lassi+cabal@lassi.io
+copyright:      2021 Lassi Kortela
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+  README.md
+
+source-repository head
+  type: git
+  location: https://github.com/lassik/pandoc-tar
+
+executable pandoc-tar
+  main-is: Main.hs
+  hs-source-dirs:
+      .
+  build-depends:
+      base >=4.7 && <5
+    , pandoc
+    , tar
+    , text
+  ghc-options: -Wall
+  default-language: Haskell2010

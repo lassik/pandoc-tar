@@ -22,9 +22,17 @@ import System.Console.GetOpt
 import System.Environment
 import Control.Monad.Except
 
+data Mode
+  = Convert
+  | Version
+  | Help
+  deriving (Show)
+
 data Options = Options
-  { from           :: Maybe Text
-  , to             :: Maybe Text
+  { mode           :: Mode
+  , verbose        :: Bool
+  , from           :: Maybe String
+  , to             :: String
   , wrapText       :: Maybe WrapOption
   , columns        :: Maybe Int
   , standalone     :: Maybe Bool
@@ -33,8 +41,10 @@ data Options = Options
 
 defaultOptions :: Options
 defaultOptions = Options
-  { from       = Nothing
-  , to         = Nothing
+  { mode       = Convert
+  , verbose    = False
+  , from       = Nothing
+  , to         = "html"
   , wrapText   = Nothing
   , columns    = Nothing
   , standalone = Nothing
@@ -53,8 +63,8 @@ convertDocument options text =
 
 convertDocument' :: PandocMonad m => Options -> Text -> m Text
 convertDocument' options text = do
-  let readerFormat = fromMaybe (T.pack "markdown") $ from options
-  let writerFormat = fromMaybe (T.pack "json") $ to options
+  let readerFormat = T.pack (fromMaybe "markdown" $ from options)
+  let writerFormat = T.pack (to options)
   (readerSpec, readerExts) <- getReader readerFormat
   (writerSpec, writerExts) <- getWriter writerFormat
   let isStandalone = fromMaybe False (standalone options)
@@ -128,33 +138,42 @@ convertTarEntries options entries = Tar.foldEntries
   (\_error -> [])
   entries
 
-data Flag
- = Verbose
- | Version
- | Help
- | FromFormat String
- | ToFormat String
-   deriving Show
-
-commandLineOptions :: [OptDescr Flag]
+commandLineOptions :: [OptDescr (Options -> IO Options)]
 commandLineOptions =
-  [ Option ['h'] ["help"] (NoArg Help) "show usage and exit"
-  , Option ['V'] ["version"] (NoArg Version) "show version and exit"
-  , Option ['v'] ["verbose"] (NoArg Verbose) "write details to stderr"
-  , Option ['f'] ["from"] (ReqArg FromFormat "FORMAT") "read this markup format"
-  , Option ['t'] ["to"] (ReqArg ToFormat "FORMAT") "write this markup format"
+  [ Option ['h']
+           ["help"]
+           (NoArg (\opt -> return opt { mode = Help }))
+           "show usage and exit"
+  , Option ['V']
+           ["version"]
+           (NoArg (\opt -> return opt { mode = Version }))
+           "show version and exit"
+  , Option ['v']
+           ["verbose"]
+           (NoArg (\opt -> return opt { verbose = True }))
+           "write details to stderr"
+  , Option ['f']
+           ["from"]
+           (ReqArg (\arg opt -> return opt { from = return arg }) "FORMAT")
+           "read this markup format"
+  , Option ['t']
+           ["to"]
+           (ReqArg (\arg opt -> return opt { to = arg }) "FORMAT")
+           "write this markup format"
   ]
 
-parseCommandLine :: [String] -> IO ([Flag], [String])
+parseCommandLine :: [String] -> IO (Options)
 parseCommandLine args = case getOpt Permute commandLineOptions args of
-  (o, n, []) -> return (o, n)
-  (_, _, errs) ->
-    ioError (userError (concat errs ++ usageInfo header commandLineOptions))
+  (actions, [], []) -> do
+    options <- foldl (>>=) (return defaultOptions) actions
+    return options
+  (_, nonOptions, errors) ->
+    ioError (userError (concat errors ++ usageInfo header commandLineOptions))
   where header = "Usage: pandoc-tar [-f FORMAT] -t FORMAT <in.tar >out.tar"
 
 main :: IO ()
 main = do
-  args                  <- getArgs
-  (actions, nonOptions) <- parseCommandLine args
-  contents              <- BS.getContents
-  BS.putStr (Tar.write (convertTarEntries defaultOptions (Tar.read contents)))
+  args     <- getArgs
+  options  <- parseCommandLine args
+  contents <- BS.getContents
+  BS.putStr (Tar.write (convertTarEntries options (Tar.read contents)))

@@ -22,7 +22,7 @@ import System.Console.GetOpt
 import System.Environment
 import Control.Monad.Except
 
-data Params = Params
+data Options = Options
   { text           :: Text
   , from           :: Maybe Text
   , to             :: Maybe Text
@@ -32,8 +32,8 @@ data Params = Params
   , template       :: Maybe Text
   } deriving (Show)
 
-defaultParams :: Params
-defaultParams = Params
+defaultOptions :: Options
+defaultOptions = Options
   { text       = T.empty
   , from       = Nothing
   , to         = Nothing
@@ -47,21 +47,21 @@ defaultParams = Params
 -- they will do no IO.  This makes the server safe to use.  However,
 -- it will mean that features requiring IO, like RST includes, will not work.
 -- Changing this to
---    handleErr =<< liftIO (runIO (convertDocument' params))
+--    handleErr =<< liftIO (runIO (convertDocument' options))
 -- will allow the IO operations.
-convertDocument :: MonadError (IO a) m => Params -> m Text
-convertDocument params = handleErr $ runPure (convertDocument' params)
+convertDocument :: MonadError (IO a) m => Options -> m Text
+convertDocument options = handleErr $ runPure (convertDocument' options)
 
-convertDocument' :: PandocMonad m => Params -> m Text
-convertDocument' params = do
-  let readerFormat = fromMaybe (T.pack "markdown") $ from params
-  let writerFormat = fromMaybe (T.pack "json") $ to params
+convertDocument' :: PandocMonad m => Options -> m Text
+convertDocument' options = do
+  let readerFormat = fromMaybe (T.pack "markdown") $ from options
+  let writerFormat = fromMaybe (T.pack "json") $ to options
   (readerSpec, readerExts) <- getReader readerFormat
   (writerSpec, writerExts) <- getWriter writerFormat
-  let isStandalone = fromMaybe False (standalone params)
+  let isStandalone = fromMaybe False (standalone options)
   let toformat     = T.toLower $ T.takeWhile isAlphaNum $ writerFormat
   mbTemplate <- if isStandalone
-    then case template params of
+    then case template options of
       Nothing -> Just <$> compileDefaultTemplate toformat
       Just t  -> do
         res <- runWithPartials
@@ -87,10 +87,10 @@ convertDocument' params = do
         <> (T.pack " is not a text reader")
   reader
       def { readerExtensions = readerExts, readerStandalone = isStandalone }
-      (text params)
+      (text options)
     >>= writer def { writerExtensions = writerExts
-                   , writerWrapText   = fromMaybe WrapAuto (wrapText params)
-                   , writerColumns    = fromMaybe 72 (columns params)
+                   , writerWrapText   = fromMaybe WrapAuto (wrapText options)
+                   , writerColumns    = fromMaybe 72 (columns options)
                    , writerTemplate   = mbTemplate
                    }
 
@@ -99,8 +99,8 @@ handleErr (Right t) = return t
 handleErr (Left err) =
   throwError $ ioError (userError (T.unpack (renderError err)))
 
-convertTarEntry :: Params -> Tar.Entry -> Tar.Entry
-convertTarEntry params entry = case Tar.entryContent entry of
+convertTarEntry :: Options -> Tar.Entry -> Tar.Entry
+convertTarEntry options entry = case Tar.entryContent entry of
   Tar.NormalFile bytes _ ->
     ( ( let oldPath = Tar.Entry.entryPath entry
             newPath =
@@ -109,7 +109,7 @@ convertTarEntry params entry = case Tar.entryContent entry of
                 Right newPath' -> newPath'
               )
         in  case
-              ( convertDocument params
+              ( convertDocument options
                 { text = Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes)
                 }
               )
@@ -123,9 +123,9 @@ convertTarEntry params entry = case Tar.entryContent entry of
     )
   _ -> entry
 
-convertTarEntries :: Params -> Tar.Entries e -> [Tar.Entry.Entry]
-convertTarEntries params entries = Tar.foldEntries
-  (\entry newEntries -> (convertTarEntry params entry) : newEntries)
+convertTarEntries :: Options -> Tar.Entries e -> [Tar.Entry.Entry]
+convertTarEntries options entries = Tar.foldEntries
+  (\entry newEntries -> (convertTarEntry options entry) : newEntries)
   []
   (\_error -> [])
   entries
@@ -159,4 +159,4 @@ main = do
   args                  <- getArgs
   (actions, nonOptions) <- parseCommandLine args
   contents              <- BS.getContents
-  BS.putStr (Tar.write (convertTarEntries defaultParams (Tar.read contents)))
+  BS.putStr (Tar.write (convertTarEntries defaultOptions (Tar.read contents)))

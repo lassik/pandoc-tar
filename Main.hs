@@ -23,8 +23,7 @@ import System.Environment
 import Control.Monad.Except
 
 data Options = Options
-  { text           :: Text
-  , from           :: Maybe Text
+  { from           :: Maybe Text
   , to             :: Maybe Text
   , wrapText       :: Maybe WrapOption
   , columns        :: Maybe Int
@@ -34,8 +33,7 @@ data Options = Options
 
 defaultOptions :: Options
 defaultOptions = Options
-  { text       = T.empty
-  , from       = Nothing
+  { from       = Nothing
   , to         = Nothing
   , wrapText   = Nothing
   , columns    = Nothing
@@ -49,11 +47,12 @@ defaultOptions = Options
 -- Changing this to
 --    handleErr =<< liftIO (runIO (convertDocument' options))
 -- will allow the IO operations.
-convertDocument :: MonadError (IO a) m => Options -> m Text
-convertDocument options = handleErr $ runPure (convertDocument' options)
+convertDocument :: MonadError (IO a) m => Options -> Text -> m Text
+convertDocument options text =
+  handleErr $ runPure (convertDocument' options text)
 
-convertDocument' :: PandocMonad m => Options -> m Text
-convertDocument' options = do
+convertDocument' :: PandocMonad m => Options -> Text -> m Text
+convertDocument' options text = do
   let readerFormat = fromMaybe (T.pack "markdown") $ from options
   let writerFormat = fromMaybe (T.pack "json") $ to options
   (readerSpec, readerExts) <- getReader readerFormat
@@ -87,7 +86,7 @@ convertDocument' options = do
         <> (T.pack " is not a text reader")
   reader
       def { readerExtensions = readerExts, readerStandalone = isStandalone }
-      (text options)
+      text
     >>= writer def { writerExtensions = writerExts
                    , writerWrapText   = fromMaybe WrapAuto (wrapText options)
                    , writerColumns    = fromMaybe 72 (columns options)
@@ -109,10 +108,9 @@ convertTarEntry options entry = case Tar.entryContent entry of
                 Right newPath' -> newPath'
               )
         in  case
-              ( convertDocument options
-                { text = Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes)
-                }
-              )
+              convertDocument
+                options
+                (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes))
             of
               Left _ -> entry
               Right newText ->

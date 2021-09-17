@@ -67,7 +67,7 @@ convertDocument' options text = do
       def { readerExtensions = readerExts, readerStandalone = isStandalone }
       text
     >>= writer def { writerExtensions = writerExts
-                   , writerWrapText   = WrapAuto
+                   , writerWrapText   = wrapText options
                    , writerColumns    = 72
                    , writerTemplate   = mbTemplate
                    }
@@ -111,8 +111,8 @@ data Options = Options
   { verbose        :: Bool
   , from           :: String
   , to             :: String
+  , wrapText       :: WrapOption
 -- TODO
---  , wrapText       :: Maybe WrapOption
 --  , columns        :: Maybe Int
 --  , standalone     :: Maybe Bool
 --  , template       :: Maybe Text
@@ -133,7 +133,14 @@ cli_parser =
               <*> strOption (short 't'
                              <> long "to"
                              <> metavar "FORMAT"
-                             <> help "Output markup format");
+                             <> help "Output markup format")
+              <*> option auto
+                         (short 'w'
+                          <> long "wrap"
+                          <> metavar "WRAPOPT"
+                          <> value WrapAuto
+                          <> showDefault
+                          <> help "Text-wrapping style for output.");
         pv = infoOption "pandoc-tar 0.1"
                         (long "version" <> help "Show version."); } in
     info (helper <*> pv <*> p)

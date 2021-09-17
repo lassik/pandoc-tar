@@ -78,8 +78,8 @@ handleErr (Right t) = return t
 handleErr (Left err) =
   throwError $ ioError (userError (T.unpack (renderError err)))
 
-convertTarEntry :: Options -> Tar.Entry -> Tar.Entry
-convertTarEntry options entry = case Tar.entryContent entry of
+convert_entry :: Options -> Tar.Entry -> Tar.Entry
+convert_entry options entry = case Tar.entryContent entry of
   Tar.NormalFile bytes _ ->
     ( ( let oldPath = Tar.Entry.entryPath entry
             newPath =
@@ -101,12 +101,22 @@ convertTarEntry options entry = case Tar.entryContent entry of
     )
   _ -> entry
 
-convertTarEntries :: Options -> Tar.Entries e -> [Tar.Entry.Entry]
-convertTarEntries options entries = Tar.foldEntries
-  (\entry newEntries -> (convertTarEntry options entry) : newEntries)
+convert_entries :: Options -> Tar.Entries Tar.FormatError -> [Tar.Entry.Entry];
+convert_entries options = Tar.foldEntries
+  (\entry newEntries -> (convert_entry options entry) : newEntries)
   []
-  (\_error -> [])
-  entries
+  (\err -> error ("Error while reading archive: " ++ describe err));
+
+-- Basic pretty-printing of FormatErrors.
+describe :: Tar.FormatError -> String;
+describe Tar.TruncatedArchive         = "Truncated archive."
+describe Tar.ShortTrailer             = "Short trailer."  -- What?
+describe Tar.BadTrailer               = "Bad trailer."    -- Ditto.
+describe Tar.TrailingJunk             = "Trailing junk data."
+describe Tar.ChecksumIncorrect        = "Invalid checksum."
+describe Tar.NotTarFormat             = "Input is not valid tar data."
+describe Tar.UnrecognisedTarFormat    = "Unrecognized tar file format."
+describe Tar.HeaderBadNumericEncoding = "Invalid tar header."
 
 data Options = Options
   { verbose        :: Bool
@@ -162,4 +172,4 @@ main :: IO ();
 main = do {
   options  <- execParser cli_parser;
   contents <- BS.getContents;
-  BS.putStr (Tar.write (convertTarEntries options (Tar.read contents))); }
+  BS.putStr (Tar.write (convert_entries options (Tar.read contents))); }

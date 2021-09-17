@@ -12,44 +12,13 @@ import Data.Text.Encoding
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
-import Data.Maybe (fromMaybe)
 import Data.Char (isAlphaNum)
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
 import qualified Data.ByteString.Lazy as BS
-import System.Console.GetOpt
-import System.Environment
+import Options.Applicative hiding (columns)
 import Control.Monad.Except
-
-data Mode
-  = Convert
-  | Version
-  | Help
-  deriving (Show)
-
-data Options = Options
-  { mode           :: Mode
-  , verbose        :: Bool
-  , from           :: Maybe String
-  , to             :: String
-  , wrapText       :: Maybe WrapOption
-  , columns        :: Maybe Int
-  , standalone     :: Maybe Bool
-  , template       :: Maybe Text
-  } deriving (Show)
-
-defaultOptions :: Options
-defaultOptions = Options
-  { mode       = Convert
-  , verbose    = False
-  , from       = Nothing
-  , to         = "html"
-  , wrapText   = Nothing
-  , columns    = Nothing
-  , standalone = Nothing
-  , template   = Nothing
-  }
 
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
@@ -63,14 +32,14 @@ convertDocument options text =
 
 convertDocument' :: PandocMonad m => Options -> Text -> m Text
 convertDocument' options text = do
-  let readerFormat = T.pack (fromMaybe "markdown" $ from options)
+  let readerFormat = T.pack (from options)
   let writerFormat = T.pack (to options)
   (readerSpec, readerExts) <- getReader readerFormat
   (writerSpec, writerExts) <- getWriter writerFormat
-  let isStandalone = fromMaybe False (standalone options)
+  let isStandalone = False -- TODO
   let toformat     = T.toLower $ T.takeWhile isAlphaNum $ writerFormat
   mbTemplate <- if isStandalone
-    then case template options of
+    then case Nothing of  -- TODO
       Nothing -> Just <$> compileDefaultTemplate toformat
       Just t  -> do
         res <- runWithPartials
@@ -98,8 +67,8 @@ convertDocument' options text = do
       def { readerExtensions = readerExts, readerStandalone = isStandalone }
       text
     >>= writer def { writerExtensions = writerExts
-                   , writerWrapText   = fromMaybe WrapAuto (wrapText options)
-                   , writerColumns    = fromMaybe 72 (columns options)
+                   , writerWrapText   = WrapAuto
+                   , writerColumns    = 72
                    , writerTemplate   = mbTemplate
                    }
 
@@ -138,42 +107,40 @@ convertTarEntries options entries = Tar.foldEntries
   (\_error -> [])
   entries
 
-commandLineOptions :: [OptDescr (Options -> IO Options)]
-commandLineOptions =
-  [ Option ['h']
-           ["help"]
-           (NoArg (\opt -> return opt { mode = Help }))
-           "show usage and exit"
-  , Option ['V']
-           ["version"]
-           (NoArg (\opt -> return opt { mode = Version }))
-           "show version and exit"
-  , Option ['v']
-           ["verbose"]
-           (NoArg (\opt -> return opt { verbose = True }))
-           "write details to stderr"
-  , Option ['f']
-           ["from"]
-           (ReqArg (\arg opt -> return opt { from = return arg }) "FORMAT")
-           "read this markup format"
-  , Option ['t']
-           ["to"]
-           (ReqArg (\arg opt -> return opt { to = arg }) "FORMAT")
-           "write this markup format"
-  ]
+data Options = Options
+  { verbose        :: Bool
+  , from           :: String
+  , to             :: String
+-- TODO
+--  , wrapText       :: Maybe WrapOption
+--  , columns        :: Maybe Int
+--  , standalone     :: Maybe Bool
+--  , template       :: Maybe Text
+  } deriving (Show)
 
-parseCommandLine :: [String] -> IO (Options)
-parseCommandLine args = case getOpt Permute commandLineOptions args of
-  (actions, [], []) -> do
-    options <- foldl (>>=) (return defaultOptions) actions
-    return options
-  (_, nonOptions, errors) ->
-    ioError (userError (concat errors ++ usageInfo header commandLineOptions))
-  where header = "Usage: pandoc-tar [-f FORMAT] -t FORMAT <in.tar >out.tar"
+cli_parser :: ParserInfo Options;
+cli_parser =
+  let { p = Options
+              <$> switch (short 'v'
+                          <> long "verbose"
+                          <> help "Write details to standard output")
+              <*> strOption (short 'f'
+                             <> long "from"
+                             <> metavar "FORMAT"
+                             <> value "markdown"
+                             <> showDefault
+                             <> help "Input markup format")
+              <*> strOption (short 't'
+                             <> long "to"
+                             <> metavar "FORMAT"
+                             <> help "Output markup format");
+        pv = infoOption "pandoc-tar 0.1"
+                        (long "version" <> help "Show version."); } in
+    info (helper <*> pv <*> p)
+         (fullDesc <> header "pandoc-tar: pandoc over tar archives.");
 
-main :: IO ()
-main = do
-  args     <- getArgs
-  options  <- parseCommandLine args
-  contents <- BS.getContents
-  BS.putStr (Tar.write (convertTarEntries options (Tar.read contents)))
+main :: IO ();
+main = do {
+  options  <- execParser cli_parser;
+  contents <- BS.getContents;
+  BS.putStr (Tar.write (convertTarEntries options (Tar.read contents))); }

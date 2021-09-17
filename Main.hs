@@ -109,14 +109,14 @@ convert_entries options = Tar.foldEntries
 
 -- Basic pretty-printing of FormatErrors.
 describe :: Tar.FormatError -> String;
-describe Tar.TruncatedArchive         = "Truncated archive."
-describe Tar.ShortTrailer             = "Short trailer."  -- What?
-describe Tar.BadTrailer               = "Bad trailer."    -- Ditto.
-describe Tar.TrailingJunk             = "Trailing junk data."
-describe Tar.ChecksumIncorrect        = "Invalid checksum."
-describe Tar.NotTarFormat             = "Input is not valid tar data."
-describe Tar.UnrecognisedTarFormat    = "Unrecognized tar file format."
-describe Tar.HeaderBadNumericEncoding = "Invalid tar header."
+describe Tar.TruncatedArchive         = "Truncated archive.";
+describe Tar.ShortTrailer             = "Short trailer.";  -- What?
+describe Tar.BadTrailer               = "Bad trailer.";    -- Ditto.
+describe Tar.TrailingJunk             = "Trailing junk data.";
+describe Tar.ChecksumIncorrect        = "Invalid checksum.";
+describe Tar.NotTarFormat             = "Input is not valid tar data.";
+describe Tar.UnrecognisedTarFormat    = "Unrecognized tar file format.";
+describe Tar.HeaderBadNumericEncoding = "Invalid tar header.";
 
 data Options = Options
   { verbose        :: Bool

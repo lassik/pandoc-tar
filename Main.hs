@@ -130,7 +130,7 @@ cli_parser =
                              <> long "from"
                              <> metavar "FORMAT"
                              <> value "markdown"
-                             <> showDefault
+                             <> showDefaultWith id
                              <> help "Input markup format")
               <*> strOption (short 't'
                              <> long "to"

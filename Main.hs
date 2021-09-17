@@ -36,7 +36,7 @@ convertDocument' options text = do
   let writerFormat = T.pack (to options)
   (readerSpec, readerExts) <- getReader readerFormat
   (writerSpec, writerExts) <- getWriter writerFormat
-  let isStandalone = False -- TODO
+  let isStandalone = standalone options
   let toformat     = T.toLower $ T.takeWhile isAlphaNum $ writerFormat
   mbTemplate <- if isStandalone
     then case Nothing of  -- TODO
@@ -68,7 +68,7 @@ convertDocument' options text = do
       text
     >>= writer def { writerExtensions = writerExts
                    , writerWrapText   = wrapText options
-                   , writerColumns    = 72
+                   , writerColumns    = columns options
                    , writerTemplate   = mbTemplate
                    }
 
@@ -112,10 +112,10 @@ data Options = Options
   , from           :: String
   , to             :: String
   , wrapText       :: WrapOption
+  , columns        :: Int
+  , standalone     :: Bool
 -- TODO
---  , columns        :: Maybe Int
---  , standalone     :: Maybe Bool
---  , template       :: Maybe Text
+--  , template       :: Text
   } deriving (Show)
 
 cli_parser :: ParserInfo Options;
@@ -142,7 +142,17 @@ cli_parser =
                           <> metavar "WRAPOPT"
                           <> value WrapAuto
                           <> showDefault
-                          <> help "Text-wrapping style for output."); }
+                          <> help "Text-wrapping style for output.")
+              <*> option auto
+                         (short 'c'
+                          <> long "columns"
+                          <> metavar "INT"
+                          <> value 72
+                          <> showDefault
+                          <> help "Width of output in columns.")
+              <*> switch (short 's'
+                          <> long "standalone"
+                          <> help "Produce stand-alone output documents."); }
   in
     info (helper <*> pv <*> p)
          (fullDesc <> header "pandoc-tar: pandoc over tar archives.");

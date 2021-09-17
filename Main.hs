@@ -120,7 +120,9 @@ data Options = Options
 
 cli_parser :: ParserInfo Options;
 cli_parser =
-  let { p = Options
+  let { pv = infoOption "pandoc-tar 0.1"
+                        (long "version" <> help "Show version.");
+        p = Options
               <$> switch (short 'v'
                           <> long "verbose"
                           <> help "Write details to standard output")
@@ -140,9 +142,8 @@ cli_parser =
                           <> metavar "WRAPOPT"
                           <> value WrapAuto
                           <> showDefault
-                          <> help "Text-wrapping style for output.");
-        pv = infoOption "pandoc-tar 0.1"
-                        (long "version" <> help "Show version."); } in
+                          <> help "Text-wrapping style for output."); }
+  in
     info (helper <*> pv <*> p)
          (fullDesc <> header "pandoc-tar: pandoc over tar archives.");
 

@@ -1,5 +1,6 @@
 -- Copyright 2021 John MacFarlane (pandoc-server)
 -- Copyright 2021 Lassi Kortela (pandoc-tar)
+-- Copyright 2021 Wolfgang Corcoran-Mathe (pandoc-tar)
 -- SPDX-License-Identifier: BSD-3-Clause
 
 {-# LANGUAGE FlexibleContexts #-}

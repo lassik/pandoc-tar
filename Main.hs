@@ -123,8 +123,8 @@ describe Tar.HeaderBadNumericEncoding = "Invalid tar header.";
 
 data Options = Options
   { verbose        :: Bool
-  , from           :: String
-  , to             :: String
+  , from           :: Text
+  , to             :: Text
   , wrapText       :: WrapOption
   , columns        :: Int
   , standalone     :: Bool
@@ -140,16 +140,18 @@ cli_parser =
               <$> switch (short 'v'
                           <> long "verbose"
                           <> help "Write details to standard output")
-              <*> strOption (short 'f'
-                             <> long "from"
-                             <> metavar "FORMAT"
-                             <> value "markdown"
-                             <> showDefaultWith id
-                             <> help "Input markup format")
-              <*> strOption (short 't'
-                             <> long "to"
-                             <> metavar "FORMAT"
-                             <> help "Output markup format")
+              <*> option str
+                         (short 'f'
+                          <> long "from"
+                          <> metavar "FORMAT"
+                          <> value (T.pack "markdown")
+                          <> showDefault
+                          <> help "Input markup format")
+              <*> option str
+                         (short 't'
+                          <> long "to"
+                          <> metavar "FORMAT"
+                          <> help "Output markup format")
               <*> option auto
                          (short 'w'
                           <> long "wrap"

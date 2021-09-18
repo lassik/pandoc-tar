@@ -13,7 +13,6 @@ import Data.Text.Encoding
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
-import Data.Char (isAlphaNum)
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
@@ -65,9 +64,9 @@ convertDocument' options text =
                        (PandocAppError
                         (readerFormat <> (T.pack " is not a text writer"))) };
 
-    reader
-        def { readerExtensions = readerExts, readerStandalone = isStandalone }
-        text
+    reader (def { readerExtensions = readerExts
+                , readerStandalone = isStandalone })
+           text
       >>= writer def { writerExtensions = writerExts
                      , writerWrapText   = wrapText options
                      , writerColumns    = columns options

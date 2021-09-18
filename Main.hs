@@ -35,18 +35,17 @@ convertDocument' :: PandocMonad m => Options -> Text -> m Text
 convertDocument' options text =
   let { readerFormat = from options;
         writerFormat = to options;
-        isStandalone = standalone options;
-        toformat     = T.toLower $ T.takeWhile isAlphaNum $ writerFormat }
+        isStandalone = standalone options }
   in do {
     (readerSpec, readerExts) <- getReader readerFormat;
     (writerSpec, writerExts) <- getWriter writerFormat;
 
     mbTemplate <- if isStandalone;
       then case Nothing of {  -- TODO
-        Nothing -> Just <$> compileDefaultTemplate toformat;
+        Nothing -> Just <$> compileDefaultTemplate writerFormat;
         Just t  -> do {
           res <- runWithPartials
-            (compileTemplate ("custom." <> T.unpack toformat) t);
+            (compileTemplate ("custom." <> T.unpack writerFormat) t);
           case res of {
             Left  e   -> throwError $ PandocTemplateError (T.pack e);
             Right tpl -> return $ Just tpl }; } }

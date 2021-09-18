@@ -3,8 +3,6 @@
 -- Copyright 2021 Wolfgang Corcoran-Mathe (pandoc-tar)
 -- SPDX-License-Identifier: BSD-3-Clause
 
-{-# LANGUAGE FlexibleContexts #-}
-
 module Main where
 
 import Text.Pandoc
@@ -23,12 +21,8 @@ import Control.Monad.Except
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
 -- it will mean that features requiring IO, like RST includes, will not work.
--- Changing this to
---    handleErr =<< liftIO (runIO (convertDocument' options))
--- will allow the IO operations.
-convertDocument :: MonadError (IO a) m => Options -> Text -> m Text
-convertDocument options text =
-  handleErr $ runPure (convertDocument' options text)
+convertDocument :: Options -> Text -> Either PandocError Text
+convertDocument options text = runPure (convertDocument' options text)
 
 convertDocument' :: PandocMonad m => Options -> Text -> m Text
 convertDocument' options text =
@@ -73,11 +67,6 @@ convertDocument' options text =
                      , writerTemplate   = mbTemplate
                      } }
 
-handleErr :: MonadError (IO a1) m => Either PandocError a2 -> m a2
-handleErr (Right t) = return t
-handleErr (Left err) =
-  throwError $ ioError (userError (T.unpack (renderError err)))
-
 convert_entry :: Options -> Tar.Entry -> Tar.Entry;
 convert_entry options entry = case (Tar.entryContent entry) of {
   Tar.NormalFile bytes _ ->
@@ -95,7 +84,7 @@ translate_path is_dir old = either error id (Tar.Entry.toTarPath is_dir old)
 convert_regular :: Options -> Text -> Tar.Entry.TarPath -> Tar.Entry;
 convert_regular options text path =
   case (convertDocument options text) of {
-    Left _          -> error "Decoding failed.";  -- TODO
+    Left pe         -> error (T.unpack (renderError pe));
     (Right newText) -> Tar.Entry.fileEntry path
                          (TLE.encodeUtf8 (TL.fromStrict newText)) }
 

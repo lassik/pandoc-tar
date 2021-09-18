@@ -78,28 +78,26 @@ handleErr (Right t) = return t
 handleErr (Left err) =
   throwError $ ioError (userError (T.unpack (renderError err)))
 
-convert_entry :: Options -> Tar.Entry -> Tar.Entry
-convert_entry options entry = case Tar.entryContent entry of
+convert_entry :: Options -> Tar.Entry -> Tar.Entry;
+convert_entry options entry = case (Tar.entryContent entry) of {
   Tar.NormalFile bytes _ ->
-    ( ( let oldPath = Tar.Entry.entryPath entry
-            newPath =
-              ( case Tar.Entry.toTarPath False oldPath of
-                Left  _        -> Tar.Entry.entryTarPath entry
-                Right newPath' -> newPath'
-              )
-        in  case
-              convertDocument
-                options
-                (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes))
-            of
-              Left _ -> entry
-              Right newText ->
-                ( Tar.Entry.fileEntry newPath
-                                      (TLE.encodeUtf8 (TL.fromStrict newText))
-                )
-      )
-    )
-  _ -> entry
+    let { path = translate_path False (Tar.Entry.entryPath entry) } in
+      convert_regular options
+         (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes))
+         path;
+  _ -> entry }
+
+-- The check here becomes relevant when we are converting between
+-- different tar, since the valid path length may differ.
+translate_path :: Bool -> FilePath -> Tar.Entry.TarPath;
+translate_path is_dir old = either error id (Tar.Entry.toTarPath is_dir old)
+
+convert_regular :: Options -> Text -> Tar.Entry.TarPath -> Tar.Entry;
+convert_regular options text path =
+  case (convertDocument options text) of {
+    Left _          -> error "Decoding failed.";  -- TODO
+    (Right newText) -> Tar.Entry.fileEntry path
+                         (TLE.encodeUtf8 (TL.fromStrict newText)) }
 
 convert_entries :: Options -> Tar.Entries Tar.FormatError -> [Tar.Entry.Entry];
 convert_entries options = Tar.foldEntries

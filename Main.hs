@@ -32,38 +32,42 @@ convertDocument options text =
   handleErr $ runPure (convertDocument' options text)
 
 convertDocument' :: PandocMonad m => Options -> Text -> m Text
-convertDocument' options text = do
-  let readerFormat = T.pack (from options)
-  let writerFormat = T.pack (to options)
-  (readerSpec, readerExts) <- getReader readerFormat
-  (writerSpec, writerExts) <- getWriter writerFormat
-  let isStandalone = standalone options
-  let toformat     = T.toLower $ T.takeWhile isAlphaNum $ writerFormat
-  mbTemplate <- if isStandalone
-    then case Nothing of  -- TODO
-      Nothing -> Just <$> compileDefaultTemplate toformat
-      Just t  -> do
+convertDocument' options text = do {
+  let readerFormat = T.pack (from options);
+  let writerFormat = T.pack (to options);
+  (readerSpec, readerExts) <- getReader readerFormat;
+  (writerSpec, writerExts) <- getWriter writerFormat;
+  let isStandalone = standalone options;
+  let toformat     = T.toLower $ T.takeWhile isAlphaNum $ writerFormat;
+
+  mbTemplate <- if isStandalone;
+    then case Nothing of {  -- TODO
+      Nothing -> Just <$> compileDefaultTemplate toformat;
+      Just t  -> do {
         res <- runWithPartials
-          (compileTemplate ("custom." <> T.unpack toformat) t)
-        case res of
-          Left  e   -> throwError $ PandocTemplateError (T.pack e)
-          Right tpl -> return $ Just tpl
-    else return Nothing
+          (compileTemplate ("custom." <> T.unpack toformat) t);
+        case res of {
+          Left  e   -> throwError $ PandocTemplateError (T.pack e);
+          Right tpl -> return $ Just tpl }; } }
+    else return Nothing;
+
   -- We don't yet handle binary formats:
-  reader <- case readerSpec of
-    TextReader r -> return r
+  reader <- case readerSpec of {
+    TextReader r -> return r;
     _ ->
       throwError
         $  PandocAppError
         $  readerFormat
-        <> (T.pack " is not a text reader")
-  writer <- case writerSpec of
-    TextWriter w -> return w
+        <> (T.pack " is not a text reader") };
+
+  writer <- case writerSpec of {
+    TextWriter w -> return w;
     _ ->
       throwError
         $  PandocAppError
         $  readerFormat
-        <> (T.pack " is not a text reader")
+        <> (T.pack " is not a text reader") };
+
   reader
       def { readerExtensions = readerExts, readerStandalone = isStandalone }
       text
@@ -71,7 +75,7 @@ convertDocument' options text = do
                    , writerWrapText   = wrapText options
                    , writerColumns    = columns options
                    , writerTemplate   = mbTemplate
-                   }
+                   } }
 
 handleErr :: MonadError (IO a1) m => Either PandocError a2 -> m a2
 handleErr (Right t) = return t

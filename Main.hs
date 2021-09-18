@@ -51,22 +51,19 @@ convertDocument' options text =
             Right tpl -> return $ Just tpl }; } }
       else return Nothing;
 
-    -- We don't yet handle binary formats:
+    -- We don't yet handle binary formats.
+
     reader <- case readerSpec of {
       TextReader r -> return r;
-      _ ->
-        throwError
-          $  PandocAppError
-          $  readerFormat
-          <> (T.pack " is not a text reader") };
+      _            -> throwError $
+                       (PandocAppError
+                        (readerFormat <> (T.pack " is not a text reader"))) };
 
     writer <- case writerSpec of {
       TextWriter w -> return w;
-      _ ->
-        throwError
-          $  PandocAppError
-          $  readerFormat
-          <> (T.pack " is not a text reader") };
+      _            -> throwError $
+                       (PandocAppError
+                        (readerFormat <> (T.pack " is not a text writer"))) };
 
     reader
         def { readerExtensions = readerExts, readerStandalone = isStandalone }

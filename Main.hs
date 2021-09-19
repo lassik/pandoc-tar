@@ -34,7 +34,7 @@ convertDocument' options text =
     (writerSpec, writerExts) <- getWriter writerFormat;
 
     mbTemplate <- if isStandalone;
-      then case Nothing of {  -- TODO
+      then case (template options) of {  -- TODO
         Nothing -> Just <$> compileDefaultTemplate writerFormat;
         Just t  -> do {
           res <- runWithPartials
@@ -112,8 +112,7 @@ data Options = Options
   , wrapText       :: WrapOption
   , columns        :: Int
   , standalone     :: Bool
--- TODO
---  , template       :: Text
+  , template       :: Maybe Text
   } deriving (Show)
 
 cli_parser :: ParserInfo Options;
@@ -152,7 +151,13 @@ cli_parser =
                           <> help "Width of output in columns.")
               <*> switch (short 's'
                           <> long "standalone"
-                          <> help "Produce stand-alone output documents."); }
+                          <> help "Produce stand-alone output documents.")
+              <*> (optional $
+                    option auto
+                           (short 'm'
+                            <> long "template"
+                            <> metavar "TEMPLATE"
+                            <> help "Pandoc template to use.")); }
   in
     info (helper <*> pv <*> p)
          (fullDesc <> header "pandoc-tar: pandoc over tar archives.");

@@ -74,10 +74,9 @@ convert_entry options entry = case (Tar.entryContent entry) of {
       convert_regular options
          (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes))
          path;
-  _ -> entry }
+  Tar.Directory -> entry;
+  ec -> error ((Tar.entryPath entry) ++ ": invalid filetype: " ++ show ec) }
 
--- The check here becomes relevant when we are converting between
--- different tar, since the valid path length may differ.
 translate_path :: Bool -> FilePath -> Tar.Entry.TarPath;
 translate_path is_dir old = either error id (Tar.Entry.toTarPath is_dir old)
 

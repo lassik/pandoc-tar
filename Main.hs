@@ -18,6 +18,9 @@ import qualified Data.ByteString.Lazy as BS
 import Options.Applicative hiding (columns)
 import Control.Monad.Except
 
+version :: String;
+version = "pandoc-tar 0.1";
+
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
 -- it will mean that features requiring IO, like RST includes, will not work.
@@ -117,7 +120,7 @@ data Options = Options
 
 cli_parser :: ParserInfo Options;
 cli_parser =
-  let { pv = infoOption "pandoc-tar 0.1"
+  let { pv = infoOption version
                         (long "version" <> help "Show version.");
         p = Options
               <$> switch (short 'v'

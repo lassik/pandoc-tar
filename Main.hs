@@ -88,11 +88,12 @@ convert_regular options text path =
     (Right newText) -> Tar.Entry.fileEntry path
                          (TLE.encodeUtf8 (TL.fromStrict newText)) }
 
-convert_entries :: Options -> Tar.Entries Tar.FormatError -> [Tar.Entry.Entry];
-convert_entries options = Tar.foldEntries
-  (\entry newEntries -> (convert_entry options entry) : newEntries)
-  []
-  (\err -> error ("Error while reading archive: " ++ describe err));
+-- Fusion of Tar.mapEntries and list conversion, handling format errors.
+maplist_entries :: (Tar.Entry -> a) -> Tar.Entries Tar.FormatError -> [a]
+maplist_entries f =
+  Tar.foldEntries (\e xs -> f e : xs)
+                  []
+                  (\err -> error ("Tar format error: " ++ describe err))
 
 -- Basic pretty-printing of FormatErrors.
 describe :: Tar.FormatError -> String;
@@ -166,4 +167,6 @@ main :: IO ();
 main = do {
   options  <- execParser cli_parser;
   contents <- BS.getContents;
-  BS.putStr (Tar.write (convert_entries options (Tar.read contents))); }
+  BS.putStr
+   (Tar.write
+    (maplist_entries (convert_entry options) (Tar.read contents))); }

@@ -34,15 +34,15 @@ convertDocument :: Options -> FilePath -> Text -> Either PandocError Text;
 convertDocument options path text =
   runPure (convertDocument' options path text)
 
-get_input_format :: Maybe Text -> FilePath -> Text;
-get_input_format (Just fmt) _    = fmt
+get_input_format :: Maybe String -> FilePath -> Text;
+get_input_format (Just fmt) _    = T.pack fmt
 get_input_format Nothing    path =
   maybe default_input_format T.pack (format_from_path path);
 
 convertDocument' :: PandocMonad m => Options -> FilePath -> Text -> m Text;
 convertDocument' options path text =
   let { readerFormat = get_input_format (from options) path;
-        writerFormat = to options;
+        writerFormat = T.pack (to options);
         isStandalone = standalone options }
   in do {
     (readerSpec, readerExts) <- getReader readerFormat;
@@ -121,8 +121,8 @@ describe Tar.HeaderBadNumericEncoding = "Invalid tar header.";
 
 data Options = Options
   { verbose        :: Bool
-  , from           :: Maybe Text
-  , to             :: Text
+  , from           :: Maybe String
+  , to             :: String
   , wrapText       :: WrapOption
   , columns        :: Int
   , standalone     :: Bool
@@ -138,16 +138,15 @@ cli_parser =
                           <> long "verbose"
                           <> help "Write details to standard output")
               <*> (optional $
-                     option str
-                            (short 'f'
-                             <> long "from"
-                             <> metavar "FORMAT"
-                             <> help "Force input markup format"))
-              <*> option str
-                         (short 't'
-                          <> long "to"
-                          <> metavar "FORMAT"
-                          <> help "Output markup format")
+                     strOption (short 'f'
+                                <> long "from"
+                                <> metavar "FORMAT"
+                                <> help "Force input markup format"))
+              <*> strOption
+                  (short 't'
+                   <> long "to"
+                   <> metavar "FORMAT"
+                   <> help "Output markup format")
               <*> option auto
                          (short 'w'
                           <> long "wrap"
@@ -185,7 +184,7 @@ get_output_extension fmt =
 main :: IO ();
 main = do {
   options  <- execParser cli_parser;
-  ext      <- return (get_output_extension (T.unpack (to options)));
+  ext      <- return (get_output_extension (to options));
   contents <- BS.getContents;
   BS.putStr
    (Tar.write

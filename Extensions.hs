@@ -1,5 +1,7 @@
-module Extensions (extension_from_format, format_from_extension)
+module Extensions (extension_from_format, format_from_path)
   where
+
+import System.FilePath
 
 extension_from_format :: String -> Maybe String;
 extension_from_format fmt = lookup fmt format_extensions;
@@ -43,6 +45,9 @@ format_extensions =
    , ("tei", ".tei")
    , ("texinfo", ".texinfo")
    , ("textile", ".textile")];
+
+format_from_path :: FilePath -> Maybe String;
+format_from_path = format_from_extension . takeExtension
 
 format_from_extension :: String -> Maybe String;
 format_from_extension s =

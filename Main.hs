@@ -17,19 +17,31 @@ import qualified Codec.Archive.Tar.Entry as Tar.Entry
 import qualified Data.ByteString.Lazy as BS
 import Options.Applicative hiding (columns)
 import Control.Monad.Except
+import System.FilePath
+
+import Extensions
 
 version :: String;
 version = "pandoc-tar 0.1";
 
+default_input_format :: Text;
+default_input_format = T.pack "markdown";
+
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
 -- it will mean that features requiring IO, like RST includes, will not work.
-convertDocument :: Options -> Text -> Either PandocError Text
-convertDocument options text = runPure (convertDocument' options text)
+convertDocument :: Options -> FilePath -> Text -> Either PandocError Text;
+convertDocument options path text =
+  runPure (convertDocument' options path text)
 
-convertDocument' :: PandocMonad m => Options -> Text -> m Text
-convertDocument' options text =
-  let { readerFormat = from options;
+get_input_format :: Maybe Text -> FilePath -> Text;
+get_input_format (Just fmt) _    = fmt
+get_input_format Nothing    path =
+  maybe default_input_format T.pack (format_from_path path);
+
+convertDocument' :: PandocMonad m => Options -> FilePath -> Text -> m Text;
+convertDocument' options path text =
+  let { readerFormat = get_input_format (from options) path;
         writerFormat = to options;
         isStandalone = standalone options }
   in do {
@@ -70,25 +82,24 @@ convertDocument' options text =
                      , writerTemplate   = mbTemplate
                      } }
 
-convert_entry :: Options -> Tar.Entry -> Tar.Entry;
-convert_entry options entry = case (Tar.entryContent entry) of {
+convert_entry :: Options -> String -> Tar.Entry -> Tar.Entry;
+convert_entry options ext entry = case (Tar.entryContent entry) of {
   Tar.NormalFile bytes _ ->
-    let { path = translate_path False (Tar.Entry.entryPath entry) } in
+    let { path = replaceExtension (Tar.Entry.entryPath entry) ext } in
       convert_regular options
-         (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes))
-         path;
+         path
+         (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes));
   Tar.Directory -> entry;
   ec -> error ((Tar.entryPath entry) ++ ": invalid filetype: " ++ show ec) }
 
-translate_path :: Bool -> FilePath -> Tar.Entry.TarPath;
-translate_path is_dir old = either error id (Tar.Entry.toTarPath is_dir old)
-
-convert_regular :: Options -> Text -> Tar.Entry.TarPath -> Tar.Entry;
-convert_regular options text path =
-  case (convertDocument options text) of {
+convert_regular :: Options -> FilePath -> Text -> Tar.Entry;
+convert_regular options path text =
+  case (convertDocument options path text) of {
     Left pe         -> error (T.unpack (renderError pe));
-    (Right newText) -> Tar.Entry.fileEntry path
-                         (TLE.encodeUtf8 (TL.fromStrict newText)) }
+    (Right newText) ->
+      let { tp = either error id (Tar.Entry.toTarPath False path) } in
+        Tar.Entry.fileEntry tp
+                            (TLE.encodeUtf8 (TL.fromStrict newText)) }
 
 -- Fusion of Tar.mapEntries and list conversion, handling format errors.
 maplist_entries :: (Tar.Entry -> a) -> Tar.Entries Tar.FormatError -> [a]
@@ -110,7 +121,7 @@ describe Tar.HeaderBadNumericEncoding = "Invalid tar header.";
 
 data Options = Options
   { verbose        :: Bool
-  , from           :: Text
+  , from           :: Maybe Text
   , to             :: Text
   , wrapText       :: WrapOption
   , columns        :: Int
@@ -126,13 +137,12 @@ cli_parser =
               <$> switch (short 'v'
                           <> long "verbose"
                           <> help "Write details to standard output")
-              <*> option str
-                         (short 'f'
-                          <> long "from"
-                          <> metavar "FORMAT"
-                          <> value (T.pack "markdown")
-                          <> showDefault
-                          <> help "Input markup format")
+              <*> (optional $
+                     option str
+                            (short 'f'
+                             <> long "from"
+                             <> metavar "FORMAT"
+                             <> help "Force input markup format"))
               <*> option str
                          (short 't'
                           <> long "to"
@@ -165,10 +175,18 @@ cli_parser =
     info (helper <*> pv <*> p)
          (fullDesc <> header "pandoc-tar: pandoc over tar archives.");
 
+get_output_extension :: String -> String;
+get_output_extension fmt =
+  case (extension_from_format fmt) of {
+    Just ext -> ext;
+    Nothing  ->
+      error ("Unrecognized output format: " ++ fmt); }
+
 main :: IO ();
 main = do {
   options  <- execParser cli_parser;
+  ext      <- return (get_output_extension (T.unpack (to options)));
   contents <- BS.getContents;
   BS.putStr
    (Tar.write
-    (maplist_entries (convert_entry options) (Tar.read contents))); }
+    (maplist_entries (convert_entry options ext) (Tar.read contents))); }

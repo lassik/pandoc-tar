@@ -29,5 +29,7 @@ executable pandoc-tar
     , tar
     , text
     , optparse-applicative
+    , filepath
+  other-modules: Extensions
   ghc-options: -Wall
   default-language: Haskell2010

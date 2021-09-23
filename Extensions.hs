@@ -6,8 +6,9 @@ import System.FilePath
 extension_from_format :: String -> Maybe String;
 extension_from_format fmt = lookup fmt format_extensions;
 
--- The following are based on pandoc sources.  They will need
--- future curation.
+-- The following are based on the pandoc source file
+-- `src/Text/Pandoc/App/FormatHeuristics.hs`. They will need future
+-- curation.
 format_extensions :: [(String, String)];
 format_extensions =
    [ ("asciidoc", ".txt")   -- Correct, according to asciidoc's creator.

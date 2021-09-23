@@ -5,20 +5,19 @@
 
 module Main where
 
+import Control.Monad.Except
 import Data.Maybe
 import Data.Text (Text)
-import Data.Text.Encoding
+import Data.Text.Encoding as TE
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
+import qualified Data.ByteString.Lazy as BSL
+import System.FilePath
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
-import qualified Data.ByteString.Lazy as BS
 import Options.Applicative hiding (columns)
-import Control.Monad.Except
-import System.FilePath
-
 import Text.Pandoc
 
 import Extensions
@@ -93,7 +92,7 @@ convert_entry options toExt entry =
            options
            fromPath
            (replaceExtension fromPath toExt)
-           (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes));
+           (TE.decodeUtf8 (BSL.toStrict bytes));
       Tar.Directory -> entry;
       ec -> error (fromPath ++ ": invalid filetype: " ++ show ec) }
 
@@ -190,7 +189,7 @@ main :: IO ();
 main = do {
   options  <- execParser cli_parser;
   toExt    <- return (get_output_extension (to options));
-  contents <- BS.getContents;
-  BS.putStr
+  contents <- BSL.getContents;
+  BSL.putStr
    (Tar.write
     (maplist_entries (convert_entry options toExt) (Tar.read contents))); }

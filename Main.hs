@@ -3,8 +3,6 @@
 -- Copyright 2021 Wolfgang Corcoran-Mathe (pandoc-tar)
 -- SPDX-License-Identifier: BSD-3-Clause
 
-{-# LANGUAGE DeriveGeneric #-}
-
 module Main where
 
 import Control.Exception
@@ -21,12 +19,10 @@ import System.IO
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
-import Data.Aeson (ToJSON)
+import Data.Aeson hiding (Options)
 import Data.Aeson.Encode.Pretty
 import Options.Applicative hiding (columns)
 import Text.Pandoc
-
-import GHC.Generics hiding (from, to) -- for JSON
 
 import Extensions
 
@@ -74,8 +70,9 @@ convertDocument' options fromPath text =
       Just rf -> return rf;
       _       -> throwError $
                    PandocAppError
-                     (T.pack ("Cannot auto-detect format of " <>
-                              (show fromPath))); };
+                     (T.pack
+                      ("Could not deduce format from file extension " <>
+                        (show fromPath))); };
 
     (readerSpec, readerExts) <- getReader readerFormat;
     (writerSpec, writerExts) <- getWriter writerFormat;
@@ -154,48 +151,54 @@ describe Tar.NotTarFormat             = "Input is not valid tar data.";
 describe Tar.UnrecognisedTarFormat    = "Unrecognized tar file format.";
 describe Tar.HeaderBadNumericEncoding = "Invalid tar header.";
 
-data LogsFileNote = LogsFileNote {
-    line :: Int
-  , column :: Int
-  , isError :: Bool
-  , note :: String
-} deriving (Generic, Show)
+-- LogMessage fields are defined in pandoc "src/Text/Pandoc/Logging.hs".
 
-data LogsFile = LogsFile {
+data BatchLogFileEntry = BatchLogFileEntry {
     fromFilename :: Text
   , fromFormat :: Text
   , toFilename :: Text
   , toFormat :: Text
-  , notes :: [LogsFileNote]
-} deriving (Generic, Show)
+  , fileMessages :: [Text.Pandoc.LogMessage]
+} deriving (Show)
 
-data Logs = Logs {
+data BatchLog = BatchLog {
     fromProgram :: Text
   , fromVersion :: [Int]
-  , generalErrors :: [String]
-  , files :: [LogsFile]
-} deriving (Generic, Show)
+  , batchMessages :: [Text]
+  , files :: [BatchLogFileEntry]
+} deriving (Show)
 
-instance ToJSON LogsFileNote
-instance ToJSON LogsFile
-instance ToJSON Logs
+log_file_entry_to_json :: BatchLogFileEntry -> Data.Aeson.Value
+log_file_entry_to_json file = object $
+  [ T.pack "source" .= toJSON (fromFilename file)
+  , T.pack "source-format" .= toJSON (fromFormat file)
+  , T.pack "target" .= toJSON (toFilename file)
+  , T.pack "target-format" .= toJSON (toFormat file)
+  , T.pack "messages" .= toJSON (fileMessages file) ]
 
-crash_log :: SomeException -> Logs
+log_to_json :: BatchLog -> Data.Aeson.Value
+log_to_json batch_log = object $
+  [ T.pack "program-name" .= toJSON programName
+  , T.pack "program-version" .= toJSON programVersionAsList
+  , T.pack "messages" .= toJSON (batchMessages batch_log)
+  , T.pack "files" .= (map log_file_entry_to_json (files batch_log)) ]
+
+crash_log :: SomeException -> BatchLog
 crash_log exception =
-    Logs (T.pack programName)
-         programVersionAsList
-         [(show exception)]
-         []
+    BatchLog (T.pack programName)
+             programVersionAsList
+             [T.pack (show exception)]
+             []
 
-encode_log_as_json :: Logs -> BSL.ByteString
+encode_log_as_json :: BatchLog -> BSL.ByteString
 encode_log_as_json logs =
-  Data.Aeson.Encode.Pretty.encodePretty logs
+  Data.Aeson.Encode.Pretty.encodePretty (log_to_json logs)
 
-encode_log_as_text :: Logs -> BSL.ByteString
+encode_log_as_text :: BatchLog -> BSL.ByteString
 encode_log_as_text logs =
   TLE.encodeUtf8 (TL.pack (show logs))
 
-write_log :: Options -> Logs -> IO ()
+write_log :: Options -> BatchLog -> IO ()
 write_log options logs = do {
   case jsonLogFile options of {
     Nothing  -> BSL.hPutStr stderr (encode_log_as_text logs);

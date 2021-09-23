@@ -85,14 +85,14 @@ convertDocument' options fromPath text =
                      } }
 
 convert_entry :: Options -> String -> Tar.Entry -> Tar.Entry;
-convert_entry options ext entry =
+convert_entry options toExt entry =
   let fromPath = Tar.Entry.entryPath entry in
     case Tar.entryContent entry of {
       Tar.NormalFile bytes _ ->
         convert_regular
            options
            fromPath
-           (replaceExtension fromPath ext)
+           (replaceExtension fromPath toExt)
            (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes));
       Tar.Directory -> entry;
       ec -> error (fromPath ++ ": invalid filetype: " ++ show ec) }
@@ -182,15 +182,15 @@ cli_parser =
 get_output_extension :: String -> String;
 get_output_extension fmt =
   case (extension_from_format fmt) of {
-    Just ext -> ext;
+    Just toExt -> toExt;
     Nothing  ->
       error ("Unrecognized output format: " ++ fmt); }
 
 main :: IO ();
 main = do {
   options  <- execParser cli_parser;
-  ext      <- return (get_output_extension (to options));
+  toExt    <- return (get_output_extension (to options));
   contents <- BS.getContents;
   BS.putStr
    (Tar.write
-    (maplist_entries (convert_entry options ext) (Tar.read contents))); }
+    (maplist_entries (convert_entry options toExt) (Tar.read contents))); }

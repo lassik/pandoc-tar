@@ -51,8 +51,20 @@ A `pandoc-tar` executable will be put in `~/.local/bin`.
 ```
 produce-markdown-tar | pandoc-tar --from markdown --to json | consume-json-tar
 
--f FORMAT, -r FORMAT, --from=FORMAT, --read=FORMAT
--t FORMAT, -w FORMAT, --to=FORMAT, --write=FORMAT
+pandoc-tar [--version] [-v|--verbose] [-f|--from FORMAT] (-t|--to FORMAT)
+           [-w|--wrap WRAPOPT] [-c|--columns INT] [-s|--standalone]
+           [-m|--template TEMPLATE]
+
+Available options:
+  -h,--help                Show this help text
+  --version                Show version.
+  -v,--verbose             Write details to standard output
+  -f,--from FORMAT         Force input markup format
+  -t,--to FORMAT           Output markup format
+  -w,--wrap WRAPOPT        Text-wrapping style for output. (default: WrapAuto)
+  -c,--columns INT         Width of output in columns. (default: 72)
+  -s,--standalone          Produce stand-alone output documents.
+  -m,--template TEMPLATE   Pandoc template to use.
 ```
 
 ## Acknowledgements

@@ -25,8 +25,11 @@ import Text.Pandoc
 
 import Extensions
 
-version :: String;
-version = "pandoc-tar 0.1";
+programName :: String
+programName = "pandoc-tar";
+
+programVersion :: String
+programVersion = "0.1";
 
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
@@ -164,7 +167,7 @@ data Options = Options
 
 cli_parser :: ParserInfo Options;
 cli_parser =
-  let { pv = infoOption version
+  let { pv = infoOption (programName <> " " <> programVersion)
                         (long "version" <> help "Show version.");
         p = Options
               <$> switch (short 'v'

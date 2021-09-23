@@ -5,6 +5,7 @@
 
 module Main where
 
+import Control.Exception
 import Control.Monad.Except
 import Data.Text (Text)
 import Data.Text.Encoding as TE
@@ -17,6 +18,7 @@ import System.IO
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
+import Data.Aeson hiding (Options)
 import Options.Applicative hiding (columns)
 import Text.Pandoc
 
@@ -127,8 +129,30 @@ describe Tar.NotTarFormat             = "Input is not valid tar data.";
 describe Tar.UnrecognisedTarFormat    = "Unrecognized tar file format.";
 describe Tar.HeaderBadNumericEncoding = "Invalid tar header.";
 
+type Errors = String  -- TODO: Should be [{"filename": [error, ...]}, ...]
+
+encode_errors_as_json :: Errors -> BSL.ByteString
+encode_errors_as_json errors =
+  Data.Aeson.encode errors
+
+encode_errors_as_text :: Errors -> BSL.ByteString
+encode_errors_as_text errors =
+  TLE.encodeUtf8 (TL.pack (show errors))
+
+write_errors :: Options -> Errors -> IO ()
+write_errors options errors = do {
+  case jsonLogFile options of {
+    Nothing  -> BSL.hPutStr stderr (encode_errors_as_text errors);
+    Just "-" -> BSL.hPutStr stderr (encode_errors_as_json errors);
+    Just jsonLogFilePath ->
+      System.IO.withFile
+        jsonLogFilePath
+        WriteMode
+        (\h -> do BSL.hPutStr h (encode_errors_as_json errors)); } };
+
 data Options = Options
   { verbose        :: Bool
+  , jsonLogFile    :: Maybe String
   , from           :: Maybe String
   , to             :: String
   , wrapText       :: WrapOption
@@ -145,6 +169,11 @@ cli_parser =
               <$> switch (short 'v'
                           <> long "verbose"
                           <> help "Write details to standard output")
+              <*> (optional $
+                     strOption
+                       (long "log"
+                         <> metavar "FILE"
+                         <> help "Write JSON log to FILE ('-' is stderr"))
               <*> (optional $
                      strOption (short 'f'
                                 <> long "from"
@@ -195,9 +224,8 @@ failIfTerminal fileHandle displayName = do {
   when isTerminal $ do
     error (displayName <> " is a terminal"); }
 
-main :: IO ();
-main = do {
-  options  <- execParser cli_parser;
+main_with_options :: Options -> IO ();
+main_with_options options = do {
   toExt    <- return (get_output_extension (to options));
   failIfTerminal System.IO.stdin "standard input";
   failIfTerminal System.IO.stdout "standard output";
@@ -205,3 +233,9 @@ main = do {
   BSL.putStr
    (Tar.write
     (maplist_entries (convert_entry options toExt) (Tar.read contents))); }
+
+main :: IO ();
+main = do {
+  options <- execParser cli_parser;
+  catch (main_with_options options)
+        (\e -> do write_errors options (show (e :: SomeException))); }

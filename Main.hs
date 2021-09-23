@@ -162,9 +162,7 @@ data BatchLogFileEntry = BatchLogFileEntry {
 } deriving (Show)
 
 data BatchLog = BatchLog {
-    fromProgram :: Text
-  , fromVersion :: [Int]
-  , batchMessages :: [Text]
+    batchMessages :: [Text]
   , files :: [BatchLogFileEntry]
 } deriving (Show)
 
@@ -184,11 +182,7 @@ log_to_json batch_log = object $
   , T.pack "files" .= (map log_file_entry_to_json (files batch_log)) ]
 
 crash_log :: SomeException -> BatchLog
-crash_log exception =
-    BatchLog (T.pack programName)
-             programVersionAsList
-             [T.pack (show exception)]
-             []
+crash_log exception = BatchLog [T.pack (show exception)] []
 
 encode_log_as_json :: BatchLog -> BSL.ByteString
 encode_log_as_json logs =

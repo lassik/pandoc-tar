@@ -5,7 +5,7 @@
 
 module Main where
 
-import Text.Pandoc
+import Data.Maybe
 import Data.Text (Text)
 import Data.Text.Encoding
 import qualified Data.Text as T
@@ -19,29 +19,31 @@ import Options.Applicative hiding (columns)
 import Control.Monad.Except
 import System.FilePath
 
+import Text.Pandoc
+
 import Extensions
 
 version :: String;
 version = "pandoc-tar 0.1";
 
-default_input_format :: Text;
-default_input_format = T.pack "markdown";
+default_input_format :: String;
+default_input_format = "markdown";
 
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
 -- it will mean that features requiring IO, like RST includes, will not work.
 convertDocument :: Options -> FilePath -> Text -> Either PandocError Text;
-convertDocument options path text =
-  runPure (convertDocument' options path text)
+convertDocument options fromPath text =
+  runPure (convertDocument' options fromPath text)
 
-get_input_format :: Maybe String -> FilePath -> Text;
-get_input_format (Just fmt) _    = T.pack fmt
-get_input_format Nothing    path =
-  maybe default_input_format T.pack (format_from_path path);
+get_input_format :: Maybe String -> FilePath -> String;
+get_input_format (Just fmt) _        = fmt
+get_input_format Nothing    fromPath =
+  fromMaybe default_input_format (format_from_path fromPath);
 
 convertDocument' :: PandocMonad m => Options -> FilePath -> Text -> m Text;
-convertDocument' options path text =
-  let { readerFormat = get_input_format (from options) path;
+convertDocument' options fromPath text =
+  let { readerFormat = T.pack (get_input_format (from options) fromPath);
         writerFormat = T.pack (to options);
         isStandalone = standalone options }
   in do {
@@ -83,21 +85,24 @@ convertDocument' options path text =
                      } }
 
 convert_entry :: Options -> String -> Tar.Entry -> Tar.Entry;
-convert_entry options ext entry = case (Tar.entryContent entry) of {
-  Tar.NormalFile bytes _ ->
-    let { path = replaceExtension (Tar.Entry.entryPath entry) ext } in
-      convert_regular options
-         path
-         (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes));
-  Tar.Directory -> entry;
-  ec -> error ((Tar.entryPath entry) ++ ": invalid filetype: " ++ show ec) }
+convert_entry options ext entry =
+  let fromPath = Tar.Entry.entryPath entry in
+    case Tar.entryContent entry of {
+      Tar.NormalFile bytes _ ->
+        convert_regular
+           options
+           fromPath
+           (replaceExtension fromPath ext)
+           (Data.Text.Encoding.decodeUtf8 (BS.toStrict bytes));
+      Tar.Directory -> entry;
+      ec -> error (fromPath ++ ": invalid filetype: " ++ show ec) }
 
-convert_regular :: Options -> FilePath -> Text -> Tar.Entry;
-convert_regular options path text =
-  case (convertDocument options path text) of {
+convert_regular :: Options -> FilePath -> FilePath -> Text -> Tar.Entry;
+convert_regular options fromPath toPath text =
+  case convertDocument options fromPath text of {
     Left pe         -> error (T.unpack (renderError pe));
     (Right newText) ->
-      let { tp = either error id (Tar.Entry.toTarPath False path) } in
+      let { tp = either error id (Tar.Entry.toTarPath False toPath) } in
         Tar.Entry.fileEntry tp
                             (TLE.encodeUtf8 (TL.fromStrict newText)) }
 

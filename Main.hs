@@ -13,6 +13,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.ByteString.Lazy as BSL
+import System.Exit
 import System.FilePath
 import System.IO
 
@@ -238,4 +239,5 @@ main :: IO ();
 main = do {
   options <- execParser cli_parser;
   catch (main_with_options options)
-        (\e -> do write_errors options (show (e :: SomeException))); }
+        (\e -> do write_errors options (show (e :: SomeException));
+                  System.Exit.exitFailure); }

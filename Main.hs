@@ -13,6 +13,7 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.ByteString.Lazy as BSL
 import System.FilePath
+import System.IO
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
@@ -188,10 +189,18 @@ get_output_extension fmt =
     Nothing  ->
       error ("Unrecognized output format: " ++ fmt); }
 
+failIfTerminal :: System.IO.Handle -> String -> IO ()
+failIfTerminal fileHandle displayName = do {
+  isTerminal <- hIsTerminalDevice fileHandle;
+  when isTerminal $ do
+    error (displayName <> " is a terminal"); }
+
 main :: IO ();
 main = do {
   options  <- execParser cli_parser;
   toExt    <- return (get_output_extension (to options));
+  failIfTerminal System.IO.stdin "standard input";
+  failIfTerminal System.IO.stdout "standard output";
   contents <- BSL.getContents;
   BSL.putStr
    (Tar.write

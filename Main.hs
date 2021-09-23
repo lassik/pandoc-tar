@@ -6,7 +6,6 @@
 module Main where
 
 import Control.Monad.Except
-import Data.Maybe
 import Data.Text (Text)
 import Data.Text.Encoding as TE
 import qualified Data.Text as T
@@ -25,9 +24,6 @@ import Extensions
 version :: String;
 version = "pandoc-tar 0.1";
 
-default_input_format :: String;
-default_input_format = "markdown";
-
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
 -- it will mean that features requiring IO, like RST includes, will not work.
@@ -35,17 +31,24 @@ convertDocument :: Options -> FilePath -> Text -> Either PandocError Text;
 convertDocument options fromPath text =
   runPure (convertDocument' options fromPath text)
 
-get_input_format :: Maybe String -> FilePath -> String;
-get_input_format (Just fmt) _        = fmt
-get_input_format Nothing    fromPath =
-  fromMaybe default_input_format (format_from_path fromPath);
+get_input_format :: Maybe String -> FilePath -> Maybe String;
+get_input_format (Just fmt) _        = Just fmt
+get_input_format Nothing    fromPath = format_from_path fromPath
 
 convertDocument' :: PandocMonad m => Options -> FilePath -> Text -> m Text;
 convertDocument' options fromPath text =
-  let { readerFormat = T.pack (get_input_format (from options) fromPath);
+  let { readerFormat' =
+          fmap T.pack (get_input_format (from options) fromPath);
         writerFormat = T.pack (to options);
         isStandalone = standalone options }
   in do {
+    readerFormat <- case readerFormat' of {
+      Just rf -> return rf;
+      _       -> throwError $
+                   PandocAppError
+                     (T.pack ("Cannot auto-detect format of " <>
+                              (show fromPath))); };
+
     (readerSpec, readerExts) <- getReader readerFormat;
     (writerSpec, writerExts) <- getWriter writerFormat;
 

@@ -3,6 +3,8 @@
 -- Copyright 2021 Wolfgang Corcoran-Mathe (pandoc-tar)
 -- SPDX-License-Identifier: BSD-3-Clause
 
+{-# LANGUAGE DeriveGeneric #-}
+
 module Main where
 
 import Control.Exception
@@ -19,17 +21,36 @@ import System.IO
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Entry as Tar.Entry
-import Data.Aeson hiding (Options)
+import Data.Aeson (ToJSON)
+import Data.Aeson.Encode.Pretty
 import Options.Applicative hiding (columns)
 import Text.Pandoc
+
+import GHC.Generics hiding (from, to) -- for JSON
 
 import Extensions
 
 programName :: String
 programName = "pandoc-tar";
 
-programVersion :: String
-programVersion = "0.1";
+programMajorVersion :: Int
+programMajorVersion = 0
+
+programMinorVersion :: Int
+programMinorVersion = 1
+
+programPatchVersion :: Int
+programPatchVersion = 0
+
+programVersionString :: String
+programVersionString = (show programMajorVersion) <> "." <>
+                       (show programMinorVersion) <> "." <>
+                       (show programPatchVersion)
+
+programVersionAsList :: [Int]
+programVersionAsList = [ programMajorVersion
+                       , programMinorVersion
+                       , programPatchVersion ]
 
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
@@ -133,26 +154,57 @@ describe Tar.NotTarFormat             = "Input is not valid tar data.";
 describe Tar.UnrecognisedTarFormat    = "Unrecognized tar file format.";
 describe Tar.HeaderBadNumericEncoding = "Invalid tar header.";
 
-type Errors = String  -- TODO: Should be [{"filename": [error, ...]}, ...]
+data LogsFileNote = LogsFileNote {
+    line :: Int
+  , column :: Int
+  , isError :: Bool
+  , note :: String
+} deriving (Generic, Show)
 
-encode_errors_as_json :: Errors -> BSL.ByteString
-encode_errors_as_json errors =
-  Data.Aeson.encode errors
+data LogsFile = LogsFile {
+    fromFilename :: Text
+  , fromFormat :: Text
+  , toFilename :: Text
+  , toFormat :: Text
+  , notes :: [LogsFileNote]
+} deriving (Generic, Show)
 
-encode_errors_as_text :: Errors -> BSL.ByteString
-encode_errors_as_text errors =
-  TLE.encodeUtf8 (TL.pack (show errors))
+data Logs = Logs {
+    fromProgram :: Text
+  , fromVersion :: [Int]
+  , generalErrors :: [String]
+  , files :: [LogsFile]
+} deriving (Generic, Show)
 
-write_errors :: Options -> Errors -> IO ()
-write_errors options errors = do {
+instance ToJSON LogsFileNote
+instance ToJSON LogsFile
+instance ToJSON Logs
+
+crash_log :: SomeException -> Logs
+crash_log exception =
+    Logs (T.pack programName)
+         programVersionAsList
+         [(show exception)]
+         []
+
+encode_log_as_json :: Logs -> BSL.ByteString
+encode_log_as_json logs =
+  Data.Aeson.Encode.Pretty.encodePretty logs
+
+encode_log_as_text :: Logs -> BSL.ByteString
+encode_log_as_text logs =
+  TLE.encodeUtf8 (TL.pack (show logs))
+
+write_log :: Options -> Logs -> IO ()
+write_log options logs = do {
   case jsonLogFile options of {
-    Nothing  -> BSL.hPutStr stderr (encode_errors_as_text errors);
-    Just "-" -> BSL.hPutStr stderr (encode_errors_as_json errors);
+    Nothing  -> BSL.hPutStr stderr (encode_log_as_text logs);
+    Just "-" -> BSL.hPutStr stderr (encode_log_as_json logs);
     Just jsonLogFilePath ->
       System.IO.withFile
         jsonLogFilePath
         WriteMode
-        (\h -> do BSL.hPutStr h (encode_errors_as_json errors)); } };
+        (\h -> do BSL.hPutStr h (encode_log_as_json logs)); } };
 
 data Options = Options
   { verbose        :: Bool
@@ -167,7 +219,7 @@ data Options = Options
 
 cli_parser :: ParserInfo Options;
 cli_parser =
-  let { pv = infoOption (programName <> " " <> programVersion)
+  let { pv = infoOption (programName <> " " <> programVersionString)
                         (long "version" <> help "Show version.");
         p = Options
               <$> switch (short 'v'
@@ -242,5 +294,5 @@ main :: IO ();
 main = do {
   options <- execParser cli_parser;
   catch (main_with_options options)
-        (\e -> do write_errors options (show (e :: SomeException));
+        (\e -> do write_log options (crash_log e);
                   System.Exit.exitFailure); }

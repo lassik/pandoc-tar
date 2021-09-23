@@ -1,0 +1,80 @@
+---
+title: pandoc-tar
+author: The pandoc-tar authors
+date: September 23, 2021
+---
+
+# Synopsis
+
+`pandoc-tar` [*options*] [--from *FORMAT*] --to *FORMAT* <in.tar >out.tar
+
+# Description
+
+Pandoc is a tool that converts documents from one markup format to
+another. `pandoc-tar` is a fast, scripting-friendly front-end to
+Pandoc which converts a batch of many documents at once.
+
+`pandoc-tar` reads a tar(1) archive of documents from stdin and writes
+a tar archive with the converted documents to stdout. It refuses to
+run if stdin or stdout is connected to a terminal.
+
+By default, `pandoc-tar` looks at the filename extension of each file
+inside the input archive to determine the file format. It's possible
+to mix different formats in the same archive. However, if the `--from`
+option is given, all input documents are assumed to be in that format
+regardless of their filename.
+
+All documents are converted to the same output format, selected by
+`--to` which must always be given.
+
+The UTF-8 character encoding is used for both input and output. There
+is currently no way to override this.
+
+# Options
+
+## General options {.options}
+
+`-f` *FORMAT*, `-r` *FORMAT*, `--from=`*FORMAT*, `--read=`*FORMAT*
+
+:   Specify input format.
+
+`-t` *FORMAT*, `-w` *FORMAT*, `--to=`*FORMAT*, `--write=`*FORMAT*
+
+:   Specify output format.
+
+`--verbose`
+
+:   Give verbose debugging output.
+
+`--quiet`
+
+:   Suppress warning messages.
+
+`--fail-if-warnings`
+
+:   Exit with error status if there are any warnings.
+
+`--log=`*FILE*
+
+:   Write log messages in machine-readable JSON format to
+    *FILE*, which is either a filename or `-` for stderr.
+    All messages above DEBUG level will be written,
+    regardless of verbosity settings (`--verbose`, `--quiet`).
+    If this option is not given, a human-readable log is written
+    to stderr.
+
+`--list-input-formats`
+
+:   List supported input formats, one per line.
+
+`--list-output-formats`
+
+:   List supported output formats, one per line.
+
+`--version`
+
+:   Show version.
+
+`-h`, `--help`
+
+:   Show usage message.

@@ -186,11 +186,12 @@ crash_log exception = BatchLog [T.pack (show exception)] []
 
 encode_log_as_json :: BatchLog -> BSL.ByteString
 encode_log_as_json logs =
-  Data.Aeson.Encode.Pretty.encodePretty (log_to_json logs)
+  (Data.Aeson.Encode.Pretty.encodePretty (log_to_json logs)) <>
+  (TLE.encodeUtf8 (TL.pack "\n"))
 
 encode_log_as_text :: BatchLog -> BSL.ByteString
 encode_log_as_text logs =
-  TLE.encodeUtf8 (TL.pack (show logs))
+  TLE.encodeUtf8 (TL.pack ((show logs) <> "\n"))
 
 write_log :: Options -> BatchLog -> IO ()
 write_log options logs = do {

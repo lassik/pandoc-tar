@@ -203,10 +203,26 @@ normal_log fileLogs = BatchLog [] fileLogs
 crash_log :: SomeException -> BatchLog
 crash_log exception = BatchLog [T.pack (show exception)] []
 
+log_json_order :: Text -> Text -> Ordering
+log_json_order = keyOrder (map T.pack [
+    "program-name"
+  , "program-version"
+  , "source"
+  , "source-format"
+  , "target"
+  , "target-format"
+  , "messages"
+  , "files" ])
+
 encode_log_as_json :: BatchLog -> BSL.ByteString
 encode_log_as_json logs =
-  (Data.Aeson.Encode.Pretty.encodePretty (log_to_json logs)) <>
-  (TLE.encodeUtf8 (TL.pack "\n"))
+  Data.Aeson.Encode.Pretty.encodePretty'
+    Data.Aeson.Encode.Pretty.Config{
+        confIndent = Spaces 2
+      , confCompare = log_json_order
+      , confNumFormat = Generic
+      , confTrailingNewline = True }
+    (log_to_json logs)
 
 encode_log_as_text :: BatchLog -> BSL.ByteString
 encode_log_as_text logs =

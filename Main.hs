@@ -51,16 +51,18 @@ programVersionAsList = [ programMajorVersion
 -- We use runPure for the pandoc conversions, which ensures that
 -- they will do no IO.  This makes the server safe to use.  However,
 -- it will mean that features requiring IO, like RST includes, will not work.
-convertDocument :: Options -> FilePath -> Text -> Either PandocError Text;
-convertDocument options fromPath text =
-  runPure (convertDocument' options fromPath text)
+convertDocument :: Options -> FilePath -> FilePath -> Text
+  -> Either PandocError (Text, BatchLogFileEntry);
+convertDocument options fromPath toPath text =
+  runPure (convertDocument' options fromPath toPath text)
 
 get_input_format :: Maybe String -> FilePath -> Maybe String;
 get_input_format (Just fmt) _        = Just fmt
 get_input_format Nothing    fromPath = format_from_path fromPath
 
-convertDocument' :: PandocMonad m => Options -> FilePath -> Text -> m Text;
-convertDocument' options fromPath text =
+convertDocument' :: PandocMonad m => Options -> FilePath -> FilePath -> Text
+  -> m (Text, BatchLogFileEntry);
+convertDocument' options fromPath toPath text =
   let { readerFormat' =
           fmap T.pack (get_input_format (from options) fromPath);
         writerFormat = T.pack (to options);
@@ -102,36 +104,50 @@ convertDocument' options fromPath text =
                        (PandocAppError
                         (readerFormat <> (T.pack " is not a text writer"))) };
 
-    reader (def { readerExtensions = readerExts
-                , readerStandalone = isStandalone })
-           text
-      >>= writer def { writerExtensions = writerExts
-                     , writerWrapText   = wrapText options
-                     , writerColumns    = columns options
-                     , writerTemplate   = mbTemplate
-                     } }
+    entry <-
+      reader (def { readerExtensions = readerExts
+                  , readerStandalone = isStandalone })
+             text
+        >>= writer def { writerExtensions = writerExts
+                       , writerWrapText   = wrapText options
+                       , writerColumns    = columns options
+                       , writerTemplate   = mbTemplate
+                       };
 
-convert_entry :: Options -> String -> Tar.Entry -> Tar.Entry;
+    do { messages <- getLog;
+         return (entry,
+                 BatchLogFileEntry{
+                     fromFilename = T.pack fromPath
+                   , fromFormat = readerFormat
+                   , toFilename = T.pack toPath
+                   , toFormat = writerFormat
+                   , fileMessages = messages }); } }
+
+convert_entry :: Options -> String -> Tar.Entry
+  -> (Tar.Entry, Maybe BatchLogFileEntry);
 convert_entry options toExt entry =
   let fromPath = Tar.Entry.entryPath entry in
     case Tar.entryContent entry of {
       Tar.NormalFile bytes _ ->
-        convert_regular
-           options
-           fromPath
-           (replaceExtension fromPath toExt)
-           (TE.decodeUtf8 (BSL.toStrict bytes));
-      Tar.Directory -> entry;
+        let (toEntry, fileLogs) = (convert_regular
+              options
+              fromPath
+              (replaceExtension fromPath toExt)
+              (TE.decodeUtf8 (BSL.toStrict bytes)))
+        in (toEntry, Just fileLogs);
+      Tar.Directory -> (entry, Nothing);
       ec -> error (fromPath ++ ": invalid filetype: " ++ show ec) }
 
-convert_regular :: Options -> FilePath -> FilePath -> Text -> Tar.Entry;
+convert_regular :: Options -> FilePath -> FilePath -> Text
+  -> (Tar.Entry, BatchLogFileEntry);
 convert_regular options fromPath toPath text =
-  case convertDocument options fromPath text of {
-    Left pe         -> error (T.unpack (renderError pe));
-    (Right newText) ->
+  case convertDocument options fromPath toPath text of {
+    Left pe -> error (T.unpack (renderError pe));
+    Right (newText, fileLogs) ->
       let { tp = either error id (Tar.Entry.toTarPath False toPath) } in
-        Tar.Entry.fileEntry tp
-                            (TLE.encodeUtf8 (TL.fromStrict newText)) }
+        ((Tar.Entry.fileEntry tp
+                              (TLE.encodeUtf8 (TL.fromStrict newText))),
+         fileLogs) }
 
 -- Fusion of Tar.mapEntries and list conversion, handling format errors.
 maplist_entries :: (Tar.Entry -> a) -> Tar.Entries Tar.FormatError -> [a]
@@ -180,6 +196,9 @@ log_to_json batch_log = object $
   , T.pack "program-version" .= toJSON programVersionAsList
   , T.pack "messages" .= toJSON (batchMessages batch_log)
   , T.pack "files" .= (map log_file_entry_to_json (files batch_log)) ]
+
+normal_log :: [BatchLogFileEntry] -> BatchLog
+normal_log fileLogs = BatchLog [] fileLogs
 
 crash_log :: SomeException -> BatchLog
 crash_log exception = BatchLog [T.pack (show exception)] []
@@ -284,9 +303,15 @@ main_with_options options = do {
   failIfTerminal System.IO.stdin "standard input";
   failIfTerminal System.IO.stdout "standard output";
   contents <- BSL.getContents;
-  BSL.putStr
-   (Tar.write
-    (maplist_entries (convert_entry options toExt) (Tar.read contents))); }
+  let entries_and_fileLogs =
+        maplist_entries (convert_entry options toExt) (Tar.read contents);
+      entries = map fst entries_and_fileLogs;
+      fileLogs = concatMap (\maybeFileLogs ->
+                              maybe [] (\x -> [x]) maybeFileLogs)
+                           (map snd entries_and_fileLogs)
+  in do {
+     BSL.putStr (Tar.write entries);
+     write_log options (normal_log fileLogs); } }
 
 main :: IO ();
 main = do {
